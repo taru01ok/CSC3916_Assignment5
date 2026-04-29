@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { fetchMovie } from '../actions/movieActions';
 import { useDispatch, useSelector } from 'react-redux';
-import { Card, ListGroup, ListGroupItem, Image, Form, Button } from 'react-bootstrap';
+import { Card, ListGroup, ListGroupItem, Image, Form, Button, Alert } from 'react-bootstrap';
 import { BsStarFill } from 'react-icons/bs';
 import { useParams } from 'react-router-dom';
 
@@ -14,6 +14,10 @@ const MovieDetail = () => {
   const [rating, setRating] = useState('');
   const [review, setReview] = useState('');
   const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const token = localStorage.getItem('token');
+  const username = localStorage.getItem('username');
 
   useEffect(() => {
     dispatch(fetchMovie(movieId));
@@ -21,8 +25,14 @@ const MovieDetail = () => {
 
   const submitReview = (e) => {
     e.preventDefault();
-    const token = localStorage.getItem('token');
-    const username = localStorage.getItem('username');
+    setError('');
+    setMessage('');
+
+    if (!token) {
+      setError('You must be logged in to submit a review.');
+      return;
+    }
+
     fetch(`${env.REACT_APP_API_URL}/reviews`, {
       method: 'POST',
       headers: {
@@ -32,14 +42,16 @@ const MovieDetail = () => {
       },
       body: JSON.stringify({ movieId, username, review, rating: Number(rating) }),
       mode: 'cors'
-    }).then(res => res.json())
-      .then(() => {
+    }).then(res => {
+      if (!res.ok) throw new Error('Failed');
+      return res.json();
+    }).then(() => {
         setMessage('Review submitted!');
         setRating('');
         setReview('');
         dispatch(fetchMovie(movieId));
       })
-      .catch(() => setMessage('Failed to submit review.'));
+      .catch(() => setError('Failed to submit review. Please try again.'));
   };
 
   if (!selectedMovie) return <div>Loading...</div>;
@@ -54,7 +66,7 @@ const MovieDetail = () => {
         <ListGroupItem>{selectedMovie.title}</ListGroupItem>
         <ListGroupItem>
           {selectedMovie.actors.map((actor, i) => (
-            <p key={i}><b>{actor.actorName}</b> {actor.characterName}</p>
+            <p key={i}><b>{actor.actorName}</b> as {actor.characterName}</p>
           ))}
         </ListGroupItem>
         <ListGroupItem>
@@ -63,23 +75,31 @@ const MovieDetail = () => {
       </ListGroup>
       <Card.Body className="card-body bg-white">
         <h5>Reviews</h5>
-        {selectedMovie.reviews && selectedMovie.reviews.map((r, i) => (
-          <p key={i}><b>{r.username}</b> {r.review} <BsStarFill /> {r.rating}</p>
-        ))}
+        {selectedMovie.reviews && selectedMovie.reviews.length > 0
+          ? selectedMovie.reviews.map((r, i) => (
+              <p key={i}><b>{r.username}</b>: {r.review} <BsStarFill /> {r.rating}</p>
+            ))
+          : <p>No reviews yet.</p>
+        }
         <hr />
         <h5>Submit a Review</h5>
-        {message && <p style={{color: 'green'}}>{message}</p>}
-        <Form onSubmit={submitReview}>
-          <Form.Group className="mb-3">
-            <Form.Label>Rating (0-5)</Form.Label>
-            <Form.Control type="number" min="0" max="5" value={rating} onChange={e => setRating(e.target.value)} required />
-          </Form.Group>
-          <Form.Group className="mb-3">
-            <Form.Label>Review</Form.Label>
-            <Form.Control as="textarea" rows={3} value={review} onChange={e => setReview(e.target.value)} required />
-          </Form.Group>
-          <Button type="submit">Submit Review</Button>
-        </Form>
+        {message && <Alert variant="success">{message}</Alert>}
+        {error && <Alert variant="danger">{error}</Alert>}
+        {!token ? (
+          <Alert variant="warning">Please log in to submit a review.</Alert>
+        ) : (
+          <Form onSubmit={submitReview}>
+            <Form.Group className="mb-3">
+              <Form.Label>Rating (1-5)</Form.Label>
+              <Form.Control type="number" min="1" max="5" value={rating} onChange={e => setRating(e.target.value)} required />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Comment</Form.Label>
+              <Form.Control as="textarea" rows={3} value={review} onChange={e => setReview(e.target.value)} required />
+            </Form.Group>
+            <Button type="submit">Submit Review</Button>
+          </Form>
+        )}
       </Card.Body>
     </Card>
   );
